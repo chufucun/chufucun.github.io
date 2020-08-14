@@ -36,22 +36,24 @@ logo                     : # path of logo image to display in the masthead, e.g.
 masthead_title           : # overrides the website title displayed in the masthead, use " " for no title
 # breadcrumbs            : false # true, false (default)
 words_per_minute         : 200
+
+# comments
 comments:
   provider               : "utterances"
   utterances:
     theme                : "github-light"
     issue_term           : "pathname"
+
+# search
 search                   : true
-search_full_content      : # true, false (default)
-search_provider          : # lunr (default), algolia, google
+search_full_content      : true
+search_provider          : "algolia"
 algolia:
-  application_id         : # YOUR_APPLICATION_ID
-  index_name             : # YOUR_INDEX_NAME
-  search_only_api_key    : # YOUR_SEARCH_ONLY_API_KEY
-  powered_by             : # true (default), false
+  application_id         : 0654A7CE5T
+  index_name             : "blog"
+  search_only_api_key    : 3cc6b428f8bf11509855c955d280529e
+  powered_by             : true
 
-
-# Site Author
 # Site Author
 author:
   name             : "Fucun Chu"
