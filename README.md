@@ -1,7 +1,7 @@
 
 # [个人博客](https://chufucun.github.io)
 
-[![Build Status](https://travis-ci.org/chufucun/chufucun.github.io.svg?branch=master](https://travis-ci.org/github/chufucun/chufucun.github.io)
+[![Build Status](https://travis-ci.org/chufucun/chufucun.github.io.svg?branch=master)](https://travis-ci.org/chufucun/chufucun.github.io)
 
 ## 博客简介
 
