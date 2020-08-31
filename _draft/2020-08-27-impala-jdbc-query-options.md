@@ -66,7 +66,7 @@ $IMPALA_HOME/sbin/impalad --flagfile=/path/impalad_flags
 jdbc:impala://localhost:18000/default2;AuthMech=3;UID=cloudera;PWD=cloudera;MEM_LIMIT=1000000000;REQUEST_POOL=myPool
 ```
 
-见[Cloudera-JDBC-Driver-for-Impala-Install-Guide](https://www.cloudera.com/downloads/connectors/impala/jdbc/2-6-17.html) 文档 Configuring Server-Side Properties 部分。
+见 [Cloudera-JDBC-Driver-for-Impala-Install-Guide](https://www.cloudera.com/downloads/connectors/impala/jdbc/2-6-17.html) 文档 Configuring Server-Side Properties 部分。
 
 ### 3. 通过 SQL 语句
 
@@ -153,7 +153,7 @@ public class ClouderaImpalaJdbcExample {
 
 #### 4.1 Impala Shell
 
-您可以使用 Impala shell 工具 (impala-shell) 设置数据库和表、插入数据和发出查询。对于特殊查询和浏览，您可以通过交互式会话提交 SQL 语句。这里我们可以使用`SET`语句进行查询选项设置，`SET`语句并没有发送到服务端，在执行 SQL 的时候会随着语句一块发送到服务端。
+您可以使用 Impala shell 工具 (impala-shell) 设置数据库和表、插入数据和发出查询。对于特殊查询和浏览，您可以通过交互式会话提交 SQL 语句。这里我们可以使用`SET`语句进行查询选项设置，其实`SET`语句并没有立即发送到服务端，在执行 SQL 的时候会随着语句一块发送到服务端。
 
 ```shell
 [xxx.xxx.xxx.xxx:21000] default> set request_pool=root.mypool;set MT_DOP=1;     
@@ -214,7 +214,7 @@ struct Query {
 }
 ```
 
-impala-shell 使用的是[Beeswax API](https://github.com/apache/impala/blob/branch-3.4.0/be/src/service/impala-server.h#L216)，下面看下 [HiveServer2 API](https://github.com/apache/impala/blob/branch-3.4.0/be/src/service/impala-server.h#L267) 是不是也有类似配置。
+impala-shell 使用的是 [Beeswax API](https://github.com/apache/impala/blob/branch-3.4.0/be/src/service/impala-server.h#L216)，看下 [HiveServer2 API](https://github.com/apache/impala/blob/branch-3.4.0/be/src/service/impala-server.h#L267) 是不是也有类似配置。
 
 ```c++
   /// ImpalaHiveServer2Service rpcs: HiveServer2 API (implemented in impala-hs2-server.cc)
@@ -255,8 +255,6 @@ struct TExecuteStatementReq {
 ```
 
 由此可以看出可以在提交`statement`是带上`confOverlay`参数就能实现 impala-shell 一样的效果，配置当前语句有效。
-
-下面看下 Hue 时候怎么设置查询选项的。
 
 #### 4.2 Hue
 
@@ -306,11 +304,7 @@ impalad 的日志，注意看`confOverlay`参数：
 
 Hue 使用的是 [TCLIService](https://github.com/cloudera/hue/blob/master/apps/impala/gen-py/TCLIService) 接口，这个是使用 thrift 生成的。
 
-TODO: 分析 hue 到 impalad 过程。
-
-```csharp
-<span id="jump">Hello World</span>
-```
+TODO: 分析 hue 到 impalad 过程，日志，进度条等内容。    
 
 ### 5. <span id="dynamic_query_options">动态设置查询选项</span>
 
@@ -318,25 +312,286 @@ TODO: 分析 hue 到 impalad 过程。
 
 比如给每个 SQL 加上唯一标识（traceid），查询选项放到缓存redis（格式：tracdeid=map）,提交语句时从 SQL 语句总提取traceid，再到 redis 中，查询选项配置，并把获取的配置加到`TExecuteStatementReq.confOverlay`。
 
-```sql
+```sqlite
 /* traceid: xxxx */ select * from test;
 ```
 
-下面介绍基于impala jdbc 驱动的方案：
+下面介绍基于 impala jdbc 驱动实现的方案：
 
 #### 5.1 使用 AspectJ
 
-[Intro to AspectJ](https://www.baeldung.com/aspectj)
+[AspectJ](https://www.eclipse.org/aspectj/) 这里就不详细介绍了，请阅读 [Intro to AspectJ](https://www.baeldung.com/aspectj) [Comparing Spring AOP and AspectJ](https://www.baeldung.com/spring-aop-vs-aspectj)。
 
-[Comparing Spring AOP and AspectJ](https://www.baeldung.com/spring-aop-vs-aspectj)
+AspectJ 提供了三种织入时机，分别为：
+
+1. **Compile-time weaving**：编译期织入，在编译的时候一步到位，直接编译出包含织入代码的 .class 文件。
+2. **Post-compile weaving**：编译后织入，增强已经编译出来的类，如我们要增强依赖的 jar 包中的某个类的某个方法。
+3. **Load-time weaving**：在 JVM 进行类加载的时候进行织入。
+
+由于要织入驱动包中的类，显然第一种不合适，可以选第二、三种，下面分别介绍。
+
+**Post-Compile Weaving**
+
+编译后织入（有时也称为二进制织入）用于织入现有的类文件和 JAR 文件。与编译期织入一样，aspects  可以用于源代码或二进制形式的织入。由于驱动包复杂，采用 .class 织入（从 jar 提取出要织入的文件到指定目录）。
+
+可以使用 maven-dependency-plugin aspectj-maven-plugin 插件自动完成织入
+
+**Note** Intellij 在 build 的时候会自己处理 AspectJ，而不是用我们配置的 maven 插件，不会自动织入。一定要用 `mvn compile`命令或者点击 Maven 窗口：Project -> Lifecycle  -> compile。
+
+**代码**: 
+
+HS2ClientAspect.java 切面类
+
+```java
+package com.cloudera.example.aspects;
+
+import com.cloudera.example.helper.HS2ClientHelper;
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.AfterThrowing;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Pointcut;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+
+/**
+ * Aspect for HS2ClientWrapper.
+ * <p>
+ */
+@Aspect
+public class HS2ClientAspect {
+
+  private final Logger log = LoggerFactory.getLogger(this.getClass());
+
+
+  /**
+   * Pointcut that matches method.
+   */
+  @Pointcut("execution(public * com.cloudera.impala.hivecommon.api.HS2ClientWrapper" +
+      ".ExecuteStatement(..))")
+  public void hs2Pointcut() {
+    // Method is empty as this is just a Pointcut, the implementations are in the advices.
+  }
+
+
+  /**
+   * Advice that hs2 methods throwing exceptions.
+   *
+   * @param joinPoint join point for advice.
+   * @param e exception.
+   */
+  @AfterThrowing(pointcut = "hs2Pointcut()", throwing = "e")
+  public void hs2AfterThrowing(JoinPoint joinPoint, Throwable e) {
+    log.error("Exception in {}.{}() with cause = {}",
+        joinPoint.getSignature().getDeclaringTypeName(),
+        joinPoint.getSignature().getName(), e.getCause() != null ? e.getCause() : "NULL");
+  }
+
+  /**
+   * Advice that hs2 api when a method is entered and exited.
+   *
+   * @param joinPoint join point for advice.
+   * @return result.
+   * @throws Throwable throws {@link IllegalArgumentException}.
+   */
+  @Around("hs2Pointcut()")
+  public Object hs2Around(ProceedingJoinPoint joinPoint) throws Throwable {
+    if (log.isDebugEnabled()) {
+      log.debug("Enter: {}.{}() with argument[s] = {}",
+          joinPoint.getSignature().getDeclaringTypeName(),
+          joinPoint.getSignature().getName(), Arrays.toString(joinPoint.getArgs()));
+    }
+
+    try {
+      // before，add query option action 
+      // ....
+      // procee
+      Object result = joinPoint.proceed();
+      if (log.isDebugEnabled()) {
+        log.debug("Exit: {}.{}() with result = {}",
+            joinPoint.getSignature().getDeclaringTypeName(),
+            joinPoint.getSignature().getName(), result);
+      }
+      return result;
+    } catch (IllegalArgumentException e) {
+      log.error("Illegal argument: {} in {}.{}()", Arrays.toString(joinPoint.getArgs()),
+          joinPoint.getSignature().getDeclaringTypeName(),
+          joinPoint.getSignature().getName());
+
+      throw e;
+    }
+  }
+}
+```
+
+pom.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>2.1.4.RELEASE</version>
+    <relativePath/> <!-- lookup parent from repository -->
+  </parent>
+
+  <groupId>com.cloudera.example</groupId>
+  <artifactId>spring-boot-impala-jdbc-example</artifactId>
+  <version>1.0</version>
+  <description>Spring Boot Cloudera Impala JDBC Example</description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <java.version>1.8</java.version>
+    <impala.jdbc.version>2.6.17.1020</impala.jdbc.version>
+    <druid.version>1.1.21</druid.version>
+    <aspectj.version>1.8.13</aspectj.version>
+  </properties>
+
+  <dependencies>
+    <!-- These dependencies provided by your local repo -->
+    <dependency>
+      <groupId>Impala</groupId>
+      <artifactId>ImpalaJDBC42</artifactId>
+      <version>${impala.jdbc.version}</version>
+    </dependency>
+    <!-- End of dependencies provided by your local repo -->
+
+    <!-- AOP -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-aspects</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjrt</artifactId>
+      <version>${aspectj.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.alibaba</groupId>
+      <artifactId>druid-spring-boot-starter</artifactId>
+      <version>${druid.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <defaultGoal>spring-boot:run</defaultGoal>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <executable>true</executable>
+          <!-- inclue system scope jar -->
+          <includeSystemScope>true</includeSystemScope>
+        </configuration>
+      </plugin>
+      <!-- Unzip the classes to be woven from the JAR and do so before compiling -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>unpack</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>unpack</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>Impala</groupId>
+                  <artifactId>ImpalaJDBC${jdbc.version}</artifactId>
+                  <version>${impala.jdbc.version}</version>
+                  <type>jar</type>
+                  <includes>com/cloudera/impala/hivecommon/api/HS2*ClientWrapper*.*</includes>
+                  <outputDirectory>${project.build.directory}/unwoven-classes</outputDirectory>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>aspectj-maven-plugin</artifactId>
+        <version>1.11</version>
+        <configuration>
+          <complianceLevel>1.8</complianceLevel>
+          <verbose>true</verbose>
+          <!-- Weaving already compiled classes -->
+          <weaveDirectories>
+            <weaveDirectory>${project.build.directory}/unwoven-classes</weaveDirectory>
+          </weaveDirectories>
+          <aspectLibraries>
+            <aspectLibrary>
+              <groupId>org.springframework</groupId>
+              <artifactId>spring-aspects</artifactId>
+            </aspectLibrary>
+          </aspectLibraries>
+        </configuration>
+        <dependencies>
+          <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjtools</artifactId>
+            <version>${aspectj.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjrt</artifactId>
+            <version>${aspectj.version}</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <!-- Compile and weave aspects after all classes compiled by javac -->
+            <phase>process-classes</phase>
+            <goals>
+              <goal>compile</goal>
+              <goal>test-compile</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+```
+
+**Load-time weaving**
 
 
 
- 
 
 
 
 
+
+
+
+
+
+
+todo：后面会整理放到Github。
 
 
 
