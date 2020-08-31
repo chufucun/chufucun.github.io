@@ -43,7 +43,7 @@ CM 配置：
 
 路径：群集-> Impala -> 配置 -> 搜索框输入“query_options”
 
-![default_query_options](../assets/images/posts/cm-impala-config-query-options.png)
+![default_query_options](/assets/images/posts/cm-impala-config-query-options.png)
 
 点击“+”，输入key=value对，由"," 分隔。
 
@@ -273,7 +273,7 @@ server_conn_timeout=120
 
 下图是配置查询配置的方法：
 
-![hue-config-query-options](../assets/images/posts/hue-config-query-options.png)
+![hue-config-query-options](/assets/images/posts/hue-config-query-options.png)
 
 hue 的日志，注意看`confOverlay`参数：
 
@@ -508,7 +508,7 @@ public class HS2ClientAspect {
 
 当使用 spring 的 `context:load-time-weaver` 时，如果是在非容器环境下，其实就是使用的 spring-instrumentation.jar。
 
-> ###### [Generic Java applications](https://docs.spring.io/spring/docs/5.0.16.RELEASE/spring-framework-reference/core.html#aop-aj-ltw-environment-generic)
+>  [Generic Java applications](https://docs.spring.io/spring/docs/5.0.16.RELEASE/spring-framework-reference/core.html#aop-aj-ltw-environment-generic)
 >
 > When class instrumentation is required in environments that do not support or are not supported by the existing `LoadTimeWeaver` implementations, a JDK agent can be the only solution. For such cases, Spring provides `InstrumentationLoadTimeWeaver`, which requires a Spring-specific (but very general) VM agent, `org.springframework.instrument-{version}.jar` (previously named `spring-agent.jar`).
 >
