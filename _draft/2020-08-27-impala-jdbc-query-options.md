@@ -502,7 +502,29 @@ public class HS2ClientAspect {
 
 #### **Load-time weaving**
 
-它是在 JVM 加载类的时候做的织入。AspectJ 允许我们在启动的时候指定 **agent** 来实现这个功能。先**注释掉之前在 pom.xml 中用于编译后织入使用的插件**，免得影响我们的测试。
+它是在 JVM 加载类的时候做的织入。根据文档 [LTW Configuration](https://www.eclipse.org/aspectj/doc/released/devguide/ltw-configuration.html) 里面提到了三种实现方式，其中第一种，基于 agent，启动时添加`-javaagent`参数；第二种，使用了专有命令来执行；第三种，就是自定义`classloader`的方式。
+
+本文使用 spring boot 环境，非容器环境，则主要靠 java instrumentation 技术实现，这种就要加 javaagent，可以直接使用 aspectjweaver.jar；也可以直接使用 spring-instrumentation.jar。
+
+当使用 spring 的 `context:load-time-weaver` 时，如果是在非容器环境下，其实就是使用的 spring-instrumentation.jar。
+
+> ###### [Generic Java applications](https://docs.spring.io/spring/docs/5.0.16.RELEASE/spring-framework-reference/core.html#aop-aj-ltw-environment-generic)
+>
+> When class instrumentation is required in environments that do not support or are not supported by the existing `LoadTimeWeaver` implementations, a JDK agent can be the only solution. For such cases, Spring provides `InstrumentationLoadTimeWeaver`, which requires a Spring-specific (but very general) VM agent, `org.springframework.instrument-{version}.jar` (previously named `spring-agent.jar`).
+>
+> To use it, you must start the virtual machine with the Spring agent, by supplying the following JVM options:
+>
+> ```
+> -javaagent:/path/to/org.springframework.instrument-{version}.jar
+> ```
+>
+> Note that this requires modification of the VM launch script which may prevent you from using this in application server environments (depending on your operation policies). Additionally, the JDK agent will instrument the *entire* VM which can prove expensive.
+>
+> For performance reasons, it is recommended to use this configuration only if your target environment (such as [Jetty](https://www.eclipse.org/jetty/)) does not have (or does not support) a dedicated LTW.
+
+当 class instrumentation 需要时，JDK agent 就是唯一选择。此时 spring 提供了`InstrumentationLoadTimeWeaver`，这时需要指定一个 agent，`org.springframework.instrument-{version}.jar`。这样就会需要修改 VM 的启动脚本。agent 会 instrument 整个 VM，代价高昂。为了性能考虑，推荐只有在不得不使用时，才使用这种方式。 
+
+先**注释掉之前在 pom.xml 中用于编译后织入使用的插件**，免得影响测试。
 
 **文件**：
 
@@ -564,11 +586,11 @@ pom.xml:
 </plugin>
 ```
 
-这种方式需要修改启动脚本，对于项目来说会比较不友好，需要找运维人员专门配置。
+更多信息和其他两种实现方式可以参考 [曹工说Spring Boot源码（13）-- AspectJ的运行时织入（Load-Time-Weaving）](https://www.cnblogs.com/grey-wolf/p/12228958.html)
 
 
 
-todo：代码整理放到Github。
+todo：代码整理放到 Github。
 
 ## 小结
 
