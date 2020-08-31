@@ -147,7 +147,7 @@ public class ClouderaImpalaJdbcExample {
 
 以上几种方式比较适合公用查询选项调优和少量参数调优，如果系统中针对特定语句做了调优（如：RF 大小），那么其他语句未必有效，会增加了资源的消耗，如果想重置成默认状态，执行的语句又比较多，无意中增加了服务端的负载和代码的复杂度。上面几种设置的参数选项是全局或者会话级别，那有没有语句级别的，答案是有。
 
-下面先看下其他客户端是怎么设置查询选项参数的。
+下面先了解其他客户端是怎么设置查询选项参数的。
 
 ### 4. 其他客户端
 
@@ -316,9 +316,9 @@ TODO: 分析 hue 到 impalad 过程，日志，进度条等内容。
 /* traceid: xxxx */ select * from test;
 ```
 
-下面介绍基于 impala jdbc 驱动实现的方案：
+下面介绍使用 AspectJ 实现的方案：
 
-#### 5.1 使用 AspectJ
+####  AspectJ 介绍
 
 [AspectJ](https://www.eclipse.org/aspectj/) 这里就不详细介绍了，请阅读 [Intro to AspectJ](https://www.baeldung.com/aspectj) [Comparing Spring AOP and AspectJ](https://www.baeldung.com/spring-aop-vs-aspectj)。
 
@@ -330,7 +330,7 @@ AspectJ 提供了三种织入时机，分别为：
 
 由于要织入驱动包中的类，显然第一种不合适，可以选第二、三种，下面分别介绍。
 
-**Post-Compile Weaving**
+#### **Post-Compile Weaving**
 
 编译后织入（有时也称为二进制织入）用于织入现有的类文件和 JAR 文件。与编译期织入一样，aspects  可以用于源代码或二进制形式的织入。由于驱动包复杂，采用 .class 织入（从 jar 提取出要织入的文件到指定目录）。
 
@@ -338,9 +338,9 @@ AspectJ 提供了三种织入时机，分别为：
 
 **Note** Intellij 在 build 的时候会自己处理 AspectJ，而不是用我们配置的 maven 插件，不会自动织入。一定要用 `mvn compile`命令或者点击 Maven 窗口：Project -> Lifecycle  -> compile。
 
-**代码**: 
+**文件**: 
 
-HS2ClientAspect.java 切面类
+切面类，用于定义切面行为
 
 ```java
 package com.cloudera.example.aspects;
@@ -427,175 +427,152 @@ public class HS2ClientAspect {
 }
 ```
 
-pom.xml
+需要在 pom.xml
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <parent>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-parent</artifactId>
-    <version>2.1.4.RELEASE</version>
-    <relativePath/> <!-- lookup parent from repository -->
-  </parent>
-
-  <groupId>com.cloudera.example</groupId>
-  <artifactId>spring-boot-impala-jdbc-example</artifactId>
-  <version>1.0</version>
-  <description>Spring Boot Cloudera Impala JDBC Example</description>
-
-  <properties>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <java.version>1.8</java.version>
-    <impala.jdbc.version>2.6.17.1020</impala.jdbc.version>
-    <druid.version>1.1.21</druid.version>
-    <aspectj.version>1.8.13</aspectj.version>
-  </properties>
-
-  <dependencies>
-    <!-- These dependencies provided by your local repo -->
-    <dependency>
-      <groupId>Impala</groupId>
-      <artifactId>ImpalaJDBC42</artifactId>
-      <version>${impala.jdbc.version}</version>
-    </dependency>
-    <!-- End of dependencies provided by your local repo -->
-
-    <!-- AOP -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-aop</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-aspects</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.aspectj</groupId>
-      <artifactId>aspectjrt</artifactId>
-      <version>${aspectj.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>com.alibaba</groupId>
-      <artifactId>druid-spring-boot-starter</artifactId>
-      <version>${druid.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
-
-  <build>
-    <defaultGoal>spring-boot:run</defaultGoal>
-    <plugins>
-      <plugin>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
-        <configuration>
-          <executable>true</executable>
-          <!-- inclue system scope jar -->
-          <includeSystemScope>true</includeSystemScope>
-        </configuration>
-      </plugin>
-      <!-- Unzip the classes to be woven from the JAR and do so before compiling -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <executions>
-          <execution>
+<!-- Unzip the classes to be woven from the JAR and do so before compiling -->
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-dependency-plugin</artifactId>
+    <executions>
+        <execution>
             <id>unpack</id>
             <phase>generate-sources</phase>
             <goals>
-              <goal>unpack</goal>
+                <goal>unpack</goal>
             </goals>
             <configuration>
-              <artifactItems>
-                <artifactItem>
-                  <groupId>Impala</groupId>
-                  <artifactId>ImpalaJDBC${jdbc.version}</artifactId>
-                  <version>${impala.jdbc.version}</version>
-                  <type>jar</type>
-                  <includes>com/cloudera/impala/hivecommon/api/HS2*ClientWrapper*.*</includes>
-                  <outputDirectory>${project.build.directory}/unwoven-classes</outputDirectory>
-                </artifactItem>
-              </artifactItems>
+                <artifactItems>
+                    <artifactItem>
+                        <groupId>Impala</groupId>
+                        <artifactId>ImpalaJDBC${jdbc.version}</artifactId>
+                        <version>${impala.jdbc.version}</version>
+                        <type>jar</type>
+                        <includes>com/cloudera/impala/hivecommon/api/HS2*ClientWrapper*.*</includes>
+                        <outputDirectory>${project.build.directory}/unwoven-classes</outputDirectory>
+                    </artifactItem>
+                </artifactItems>
             </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>aspectj-maven-plugin</artifactId>
-        <version>1.11</version>
-        <configuration>
-          <complianceLevel>1.8</complianceLevel>
-          <verbose>true</verbose>
-          <!-- Weaving already compiled classes -->
-          <weaveDirectories>
+        </execution>
+    </executions>
+</plugin>
+<plugin>
+    <groupId>org.codehaus.mojo</groupId>
+    <artifactId>aspectj-maven-plugin</artifactId>
+    <version>1.11</version>
+    <configuration>
+        <complianceLevel>1.8</complianceLevel>
+        <verbose>true</verbose>
+        <!-- Weaving already compiled classes -->
+        <weaveDirectories>
             <weaveDirectory>${project.build.directory}/unwoven-classes</weaveDirectory>
-          </weaveDirectories>
-          <aspectLibraries>
+        </weaveDirectories>
+        <aspectLibraries>
             <aspectLibrary>
-              <groupId>org.springframework</groupId>
-              <artifactId>spring-aspects</artifactId>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-aspects</artifactId>
             </aspectLibrary>
-          </aspectLibraries>
-        </configuration>
-        <dependencies>
-          <dependency>
+        </aspectLibraries>
+    </configuration>
+    <dependencies>
+        <dependency>
             <groupId>org.aspectj</groupId>
             <artifactId>aspectjtools</artifactId>
             <version>${aspectj.version}</version>
-          </dependency>
-          <dependency>
+        </dependency>
+        <dependency>
             <groupId>org.aspectj</groupId>
             <artifactId>aspectjrt</artifactId>
             <version>${aspectj.version}</version>
-          </dependency>
-        </dependencies>
-        <executions>
-          <execution>
+        </dependency>
+    </dependencies>
+    <executions>
+        <execution>
             <!-- Compile and weave aspects after all classes compiled by javac -->
             <phase>process-classes</phase>
             <goals>
-              <goal>compile</goal>
-              <goal>test-compile</goal>
+                <goal>compile</goal>
+                <goal>test-compile</goal>
             </goals>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
-  </build>
-</project>
+        </execution>
+    </executions>
+</plugin>
+</plugins>
 ```
 
-**Load-time weaving**
+#### **Load-time weaving**
+
+它是在 JVM 加载类的时候做的织入。AspectJ 允许我们在启动的时候指定 **agent** 来实现这个功能。先**注释掉之前在 pom.xml 中用于编译后织入使用的插件**，免得影响我们的测试。
+
+**文件**：
+
+我们需要在 resources 中配置 **aop.xml** 文件，放置在 META-INF 目录中（**resource/META-INF/aop.xml**）：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE aspectj PUBLIC "-//AspectJ//DTD//EN" "http://www.eclipse.org/aspectj/dtd/aspectj.dtd">
+<aspectj>
+
+    <!-- Add this argument to options to make AspectJ logs use the Spring logging framework. -->
+    <!-- -XmessageHandlerClass:org.springframework.aop.aspectj.AspectJWeaverMessageHandler -->
+    <weaver options="-verbose -showWeaveInfo">
+        <!--
+            Only weave classes in our application-specific packages.
+            This should encompass any class that wants to utilize the aspects,
+            and does not need to encompass the aspects themselves.
+        -->
+        <include within="com.cloudera.example.aspects.*"/>
+        <include within="com.cloudera.impala.hivecommon.api..*"/>
+    </weaver>
+
+    <aspects>
+        <!-- declare aspects to the weaver -->
+        <aspect name="com.cloudera.example.aspects.HS2ClientAspect"/>
+    </aspects>
+
+</aspectj>
+```
+
+配置类：
+
+```
+@Configuration
+@EnableAspectJAutoProxy
+@EnableLoadTimeWeaving(aspectjWeaving = AspectJWeaving.AUTODETECT)
+public class AspectConfiguration {
+
+}
+```
+
+方便跑测试的话。我们往使用 surefire 插件中加上 javaagent：
+
+pom.xml: 
+
+```xml
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-surefire-plugin</artifactId>
+    <version>2.10</version>
+    <configuration>
+        <argLine>
+               -javaagent:"${settings.localRepository}\org\aspectj\aspectjweaver\${aspectj.version}\aspectjweaver-${aspectj.version}.jar"
+               -javaagent:"${settings.localRepository}\org\springframework\spring-instrument\${spring.version}\spring-instrument-${spring.version}.jar"
+         </argLine>
+        <useSystemClassLoader>true</useSystemClassLoader>
+        <forkMode>always</forkMode>
+    </configuration>
+</plugin>
+```
+
+这种方式需要修改启动脚本，对于项目来说会比较不友好，需要找运维人员专门配置。
 
 
 
+todo：代码整理放到Github。
 
+## 小结
 
-
-
-
-
-
-
-
-
-todo：后面会整理放到Github。
-
-
-
-
+本文分析了使用 impala 查询选项方法，可以设置默认，也可以针对语句设置优化后的查询选项，最后介绍了在使用 jdbc 驱动的时候如何设置查询选项，更方便的优化 sql 提升性能。
 
 
 
