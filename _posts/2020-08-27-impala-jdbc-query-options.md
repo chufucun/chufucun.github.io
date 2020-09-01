@@ -3,7 +3,7 @@ title: "Impala JDBC 设置查询选项"
 toc: true
 toc_label: "Content"
 toc_sticky: true
-date: 2019-04-18T15:34:30+08:00
+date: 2020-08-27T18:34:30+08:00
 categories:
   - Impala
 tags:
