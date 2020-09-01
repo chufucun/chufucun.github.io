@@ -60,7 +60,7 @@ algolia:
 author:
   name             : "Fucun Chu"
   avatar           : "/assets/images/bio-photo.jpg"
-  bio              : "关注大数据"
+  bio              : "Big data developer"
   location         : "China"
   email            : "chufucun@hotmail.com"
   links:
