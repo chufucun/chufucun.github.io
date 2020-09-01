@@ -15,7 +15,7 @@
 
 #theme                    : "minimal-mistakes-jekyll"
 remote_theme             : "mmistakes/minimal-mistakes"
-minimal_mistakes_skin    : "default" # "air", "aqua", "contrast", "dark", "dirt", "neon", "mint", "plum", "sunrise"
+minimal_mistakes_skin    : "contrast" # "air", "aqua", "contrast", "dark", "dirt", "neon", "mint", "plum", "sunrise"
 
 # Site settings
 # These are used to personalize your new site. If you look in the HTML files,
@@ -25,9 +25,9 @@ minimal_mistakes_skin    : "default" # "air", "aqua", "contrast", "dark", "dirt"
 locale                   : "zh-CN"
 title                    : "昧光"
 title_separator          : "-"
-subtitle                 : "技术博客,关注大数据"
+subtitle                 : # site tagline that appears below site title in masthead
 name                     : "Fucun Chu"
-description              : "技术博客,关注大数据,Impala"
+description              : "Blogging about my transition into Big Data + HOWTOs"
 url                      : "https://chufucun.github.io"
 baseurl                  : # the subpath of your site, e.g. "/blog"
 repository               : "chufucun/chufucun.github.io"
@@ -36,6 +36,8 @@ logo                     : # path of logo image to display in the masthead, e.g.
 masthead_title           : # overrides the website title displayed in the masthead, use " " for no title
 # breadcrumbs            : false # true, false (default)
 words_per_minute         : 200
+# Post Date
+show_date                : true
 
 # comments
 comments:
