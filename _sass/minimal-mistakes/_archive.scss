@@ -20,6 +20,7 @@
 
 .archive__item {
   position: relative;
+  font-size: 0.8em;
 
   a {
     position: relative;
@@ -199,6 +200,14 @@
   .page__meta {
     margin: 0 0 4px;
     font-size: 0.6em;
+  }
+
+  .page__meta-sep {
+    display: block;
+
+    &::before {
+      display: none;
+    }
   }
 
   .archive__item-title {
