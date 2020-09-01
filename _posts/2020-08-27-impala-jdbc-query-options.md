@@ -68,7 +68,17 @@ jdbc:impala://localhost:18000/default2;AuthMech=3;UID=cloudera;PWD=cloudera;MEM_
 
 见 [Cloudera-JDBC-Driver-for-Impala-Install-Guide](https://www.cloudera.com/downloads/connectors/impala/jdbc/2-6-17.html) 文档 Configuring Server-Side Properties 部分。
 
-### 3. 通过 SQL 语句
+### 3. 通过 [Admission Control](https://impala.apache.org/docs/build3x/html/topics/impala_admission.html) 资源池
+
+> The`impala.admission-control.pool-default-query-options` settings designates the default query options for all queries that run in this pool. Its argument value is a comma-delimited string of 'key=value' pairs, for example,`'key1=val1,key2=val2'`. For example, this is where you might set a default memory limit for all queries in the pool, using an argument such as `MEM_LIMIT=5G`.
+>
+> The `impala.admission-control.*` configuration settings are available in Impala 2.5 and higher.
+
+CM 中设置方法：
+
+![query options from resource pool](/assets/images/posts/impala-query-options-pool.png)
+
+### 4. 通过 SQL 语句
 
 ```sql
 # 设置队列
@@ -149,9 +159,9 @@ public class ClouderaImpalaJdbcExample {
 
 下面先了解其他客户端是怎么设置查询选项参数的。
 
-### 4. 其他客户端
+### 5. 其他客户端
 
-#### 4.1 Impala Shell
+#### Impala Shell
 
 您可以使用 Impala shell 工具 (impala-shell) 设置数据库和表、插入数据和发出查询。对于特殊查询和浏览，您可以通过交互式会话提交 SQL 语句。这里我们可以使用`SET`语句进行查询选项设置，其实`SET`语句并没有立即发送到服务端，在执行 SQL 的时候会随着语句一块发送到服务端。
 
@@ -256,7 +266,7 @@ struct TExecuteStatementReq {
 
 由此可以看出可以在提交`statement`是带上`confOverlay`参数就能实现 impala-shell 一样的效果，配置当前语句有效。
 
-#### 4.2 Hue
+#### Hue
 
 Hue 是通过 [HiveServer2 API](https://github.com/apache/impala/blob/branch-3.4.0/be/src/service/impala-server.h#L267) 接口与 Impala 交互。
 
@@ -306,7 +316,7 @@ Hue 使用的是 [TCLIService](https://github.com/cloudera/hue/blob/master/apps/
 
 TODO: 分析 hue 到 impalad 过程，日志，进度条等内容。    
 
-### 5. <span id="dynamic_query_options">动态设置查询选项</span>
+### 6. <span id="dynamic_query_options">动态设置查询选项</span>
 
 通过以上分析，我们知道 HiveServer2 接口可以支持语句级别的查询选项（通过`confOverlay`参数），能够支撑 SQL 细粒度的查询选项调优。
 
@@ -330,6 +340,10 @@ AspectJ 提供了三种织入时机，分别为：
 
 由于要织入驱动包中的类，显然第一种不合适，可以选第二、三种，下面分别介绍。
 
+#### **Compile-time weaving**
+
+我们开发大部分时候使用的是这个方式，请先阅读 [使用 AOP](https://www.liaoxuefeng.com/wiki/1252599548343744/1266265125480448) [装配 AOP](https://www.liaoxuefeng.com/wiki/1252599548343744/1310052352786466) 了解 AOP 使用方式，这种方式是织入自己工程的类，第二种一般要织入非本项目的 jar。
+
 #### **Post-Compile Weaving**
 
 编译后织入（有时也称为二进制织入）用于织入现有的类文件和 JAR 文件。与编译期织入一样，aspects  可以用于源代码或二进制形式的织入。由于驱动包复杂，采用 .class 织入（从 jar 提取出要织入的文件到指定目录）。
@@ -338,9 +352,19 @@ AspectJ 提供了三种织入时机，分别为：
 
 **Note** Intellij 在 build 的时候会自己处理 AspectJ，而不是用我们配置的 maven 插件，不会自动织入。一定要用 `mvn compile`命令或者点击 Maven 窗口：Project -> Lifecycle  -> compile。
 
-**文件**: 
+首先，我们通过 Maven 引入 Spring 对 AOP 的支持：
 
-切面类，用于定义切面行为
+```
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-aspects</artifactId>
+    <version>${spring.version}</version>
+</dependency>
+```
+
+上述依赖会自动引入 AspectJ，使用 AspectJ 实现 AOP 比较方便，因为它的定义比较简单。
+
+然后，我们定义一个`HS2ClientAspect`：
 
 ```java
 package com.cloudera.example.aspects;
@@ -427,7 +451,7 @@ public class HS2ClientAspect {
 }
 ```
 
-需要在 pom.xml
+紧接着，为了编译流程自动化需要以下插件
 
 ```xml
 <!-- Unzip the classes to be woven from the JAR and do so before compiling -->
@@ -499,6 +523,27 @@ public class HS2ClientAspect {
 </plugin>
 </plugins>
 ```
+
+执行编译：`mvn clean compile`
+
+编译后`classes`应该有这个类，这是织入处理之后的类，
+
+![aspectj-pcw-impala-jdbc-hs2client](/assets/images/posts/aspectj-pcw-impala-jdbc-hs2client.png)
+
+反编译后找到`ExecuteStatement`方法，方法已被修改。
+
+```java
+
+  public TExecuteStatementResp ExecuteStatement(TExecuteStatementReq arg0) throws TException {
+    JoinPoint var3 = Factory.makeJP(ajc$tjp_0, this, this, arg0);
+    return (TExecuteStatementResp)ExecuteStatement_aroundBody1$advice(this, arg0, var3, HS2ClientAspect.aspectOf(), (ProceedingJoinPoint)var3);
+  }
+
+```
+
+
+
+
 
 #### **Load-time weaving**
 
