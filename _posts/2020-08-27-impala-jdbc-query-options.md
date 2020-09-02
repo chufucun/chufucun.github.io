@@ -513,7 +513,7 @@ public class HS2ClientAspect {
     <executions>
         <execution>
             <!-- Compile and weave aspects after all classes compiled by javac -->
-            <phase>process-classes</phase>
+            <!--                        <phase>process-classes</phase>-->
             <goals>
                 <goal>compile</goal>
                 <goal>test-compile</goal>
